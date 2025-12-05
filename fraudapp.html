@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>UPI Fraud Detection — Single Page Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --muted:#98a0b3; --accent:#7c3aed; --glass: rgba(255,255,255,0.03);
+      --success:#16a34a; --danger:#ef4444;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; background: linear-gradient(180deg,#07102a 0%, #071529 100%); color:#e6eef8; -webkit-font-smoothing:antialiased; padding:28px;
+    }
+    .container{max-width:1150px;margin:0 auto;}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#5eead4);display:flex;align-items:center;justify-content:center;font-weight:700;color:#021025}
+    h1{font-size:20px;margin:0}
+    p.lead{color:var(--muted);margin:0}
+
+    .grid{display:grid;grid-template-columns:1fr 420px;gap:20px}
+    .card{background:var(--card);border-radius:12px;padding:16px;box-shadow: 0 6px 20px rgba(2,6,23,0.6);}
+    .card h3{margin:0 0 10px 0;font-size:16px}
+    .muted{color:var(--muted);font-size:13px}
+
+    /* controls */
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{background:var(--glass);border:1px solid rgba(255,255,255,0.04);padding:8px 12px;border-radius:8px;color:inherit;cursor:pointer}
+    .btn.primary{background:linear-gradient(90deg,var(--accent),#5eead4);color:#021025;font-weight:600;border:none}
+    .btn.warn{background:transparent;color:var(--danger);border:1px solid rgba(239,68,68,0.14)}
+
+    /* table */
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px 6px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.03)}
+    tr.suspicious{background:linear-gradient(90deg, rgba(239,68,68,0.06), transparent)}
+    .pill{display:inline-block;padding:6px 8px;border-radius:999px;font-size:12px}
+    .pill.good{background:rgba(16,185,129,0.12);color:var(--success)}
+    .pill.bad{background:rgba(239,68,68,0.08);color:var(--danger)}
+
+    /* responsive */
+    @media (max-width:980px){
+      .grid{grid-template-columns:1fr;}
+      header{flex-direction:column;align-items:flex-start;gap:12px}
+    }
+
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+
+    /* small helpers */
+    .row{display:flex;gap:12px;align-items:center}
+    input[type=file]{display:none}
+    .uploader{border:1px dashed rgba(255,255,255,0.04);padding:12px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent)}
+    .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .stat{background:linear-gradient(90deg, rgba(255,255,255,0.02), transparent);padding:12px;border-radius:10px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="logo">UF</div>
+        <div>
+          <h1>UPI Fraud Detection — Prototype</h1>
+          <p class="lead">Single-page prototype that demonstrates features required to tackle UPI transaction fraud patterns.</p>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" id="show-sim">Launch Simulator</button>
+        <button class="btn" id="download-spec">Download Spec</button>
+        <button class="btn primary" id="run-detect">Run Detection</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <!-- left: main analysis area -->
+      <section>
+        <div class="card">
+          <h3>Problem summary</h3>
+          <p class="muted">India processes billions of UPI transactions monthly. This prototype includes features for data ingestion, real-time simulation, rule-based and heuristic detection, case management, visual dashboards and exportable reports to help security teams investigate instant, irreversible frauds.</p>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h3>Data ingestion & quick actions</h3>
+            <div class="muted">Upload CSV · Simulate · Filter</div>
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+            <label class="btn"><input id="file-input" type="file" accept="text/csv" /> Upload CSV</label>
+            <button class="btn" id="gen-sample">Generate Sample Data</button>
+            <button class="btn" id="clear-data">Clear</button>
+            <button class="btn" id="export-flagged">Export Flagged</button>
+          </div>
+
+          <div class="uploader muted" id="uploader-hint">Drop a CSV with columns: txn_id, timestamp, sender_vpa, receiver_vpa, amount, merchant, location, channel, verification_steps</div>
+
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>Transactions (latest 200)</h3>
+          <div style="max-height:360px;overflow:auto;margin-top:10px">
+            <table id="tx-table">
+              <thead><tr><th>ID</th><th>Time</th><th>From</th><th>To</th><th>Amt</th><th>Merchant</th><th>Location</th><th>Flags</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- right: dashboard -->
+      <aside>
+        <div class="card">
+          <h3>Dashboard</h3>
+          <div class="stat-grid" style="margin-top:8px;margin-bottom:8px">
+            <div class="stat"><div class="muted">Total Txns</div><div id="stat-total" style="font-weight:700;font-size:18px">0</div></div>
+            <div class="stat"><div class="muted">Flagged</div><div id="stat-flagged" style="font-weight:700;font-size:18px">0</div></div>
+            <div class="stat"><div class="muted">High-risk amount</div><div id="stat-highamt" style="font-weight:700;font-size:18px">₹0</div></div>
+          </div>
+          <canvas id="chart-amount" height="200"></canvas>
+          <div style="margin-top:10px;display:flex;gap:8px;justify-content:space-between;align-items:center">
+            <div class="muted">Quick filters</div>
+            <select id="filter-risk" class="btn">
+              <option value="all">All</option>
+              <option value="flagged">Flagged</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>Investigation queue</h3>
+          <p class="muted">Case management UI for flagged transactions. Click a row to open a detail panel and add notes.</p>
+          <div id="case-list" style="margin-top:8px"></div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>Detection settings</h3>
+          <p class="muted">Simple heuristics you can toggle. In production these would be replaced by ML models + behavior analytics.</p>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+            <label><input type="checkbox" id="rule-amount" checked/> Flag amount &gt; <input id="high-amt" style="width:110px;margin-left:8px" value="10000"/> </label>
+            <label><input type="checkbox" id="rule-rapid" checked/> Rapid sequential transactions &gt; 3 within 60s</label>
+            <label><input type="checkbox" id="rule-newmerchant" checked/> New merchant for user (first seen)</label>
+            <label><input type="checkbox" id="rule-verification" checked/> Suspect verification steps (screenshots, page redirects)</label>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer>
+      <div class="muted">Prototype features: CSV ingestion, transaction simulator, rule-based detection, visual dashboard, export flagged transactions, investigation queue, quick case notes and lightweight audit trail. Designed for demo and handoff to full-stack implementation.</div>
+    </footer>
+  </div>
+
+  <!-- detail modal (simple) -->
+  <div id="detail-modal" style="position:fixed;right:16px;top:80px;width:360px;display:none;z-index:40">
+    <div class="card" style="padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 id="dm-title">Txn</h3>
+        <button class="btn" id="dm-close">Close</button>
+      </div>
+      <div id="dm-body" style="margin-top:8px"></div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <input id="case-note" placeholder="Add investigation note" style="flex:1;padding:8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.04)" />
+        <button class="btn primary" id="save-note">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // minimal in-browser data model and heuristics
+    const txns = []; // stored transactions
+    const cases = []; // investigation notes
+
+    // helper to render table
+    function renderTable(filter='all'){
+      const tbody = document.querySelector('#tx-table tbody'); tbody.innerHTML='';
+      const list = txns.slice(-200).filter(t=> filter==='all' ? true : (filter==='flagged'? t.flags.length>0 : true));
+      list.forEach(t=>{
+        const tr = document.createElement('tr');
+        if(t.flags.length) tr.classList.add('suspicious');
+        tr.innerHTML = `<td>${t.txn_id}</td><td>${new Date(t.timestamp).toLocaleString()}</td><td>${t.sender_vpa}</td><td>${t.receiver_vpa}</td><td>₹${t.amount}</td><td>${t.merchant}</td><td>${t.location}</td><td>${t.flags.map(f=>`<span class=\"pill ${f.level==='high'?'bad':'good'}\">${f.label}</span>`).join(' ')}</td>`;
+        tr.addEventListener('click',()=>openDetail(t));
+        tbody.appendChild(tr);
+      });
+      document.getElementById('stat-total').innerText = txns.length;
+      document.getElementById('stat-flagged').innerText = txns.filter(t=>t.flags.length).length;
+      const highAmt = txns.reduce((m,t)=> Math.max(m,t.amount),0);
+      document.getElementById('stat-highamt').innerText = '₹'+highAmt;
+      renderCases();
+      renderChart();
+    }
+
+    function renderCases(){
+      const el = document.getElementById('case-list'); el.innerHTML='';
+      const flagged = txns.filter(t=>t.flags.length).slice(-30);
+      flagged.forEach(t=>{
+        const d = document.createElement('div'); d.style.padding='8px'; d.style.borderBottom='1px dashed rgba(255,255,255,0.03)';
+        d.innerHTML = `<div style=\"display:flex;justify-content:space-between\"><div><strong>${t.txn_id}</strong> <div class=\"muted\">${t.sender_vpa} → ${t.receiver_vpa}</div></div><div><span class=\"pill bad\">${t.flags.length} flags</span></div></div>`;
+        d.addEventListener('click',()=>openDetail(t));
+        el.appendChild(d);
+      });
+    }
+
+    // Chart
+    let amountChart=null;
+    function renderChart(){
+      const ctx = document.getElementById('chart-amount');
+      const labels = txns.slice(-30).map(t=> new Date(t.timestamp).toLocaleTimeString());
+      const data = txns.slice(-30).map(t=>t.amount);
+      if(amountChart) amountChart.destroy();
+      amountChart = new Chart(ctx,{type:'line',data:{labels, datasets:[{label:'Amount',data}]}, options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    }
+
+    function openDetail(t){
+      document.getElementById('detail-modal').style.display='block';
+      document.getElementById('dm-title').innerText = `Txn ${t.txn_id}`;
+      const body = document.getElementById('dm-body');
+      body.innerHTML = `<div class=\"muted\">${new Date(t.timestamp).toLocaleString()}</div>
+        <div style=\"margin-top:8px\"><strong>From:</strong> ${t.sender_vpa}</div>
+        <div><strong>To:</strong> ${t.receiver_vpa}</div>
+        <div><strong>Amt:</strong> ₹${t.amount}</div>
+        <div><strong>Merchant:</strong> ${t.merchant}</div>
+        <div><strong>Location:</strong> ${t.location}</div>
+        <div style=\"margin-top:8px\"><strong>Flags:</strong> ${t.flags.map(f=>f.label).join(', ')||'None'}</div>
+        <div style=\"margin-top:8px\"><strong>Notes:</strong><ul>${(t.notes||[]).map(n=>`<li>${n}</li>`).join('')}</ul></div>`;
+      document.getElementById('save-note').onclick = ()=>{
+        const v = document.getElementById('case-note').value.trim(); if(!v) return alert('enter note');
+        t.notes = t.notes||[]; t.notes.push(v); document.getElementById('case-note').value=''; openDetail(t); renderTable(document.getElementById('filter-risk').value);
+      }
+    }
+    document.getElementById('dm-close').onclick = ()=> document.getElementById('detail-modal').style.display='none';
+
+    // detection heuristics
+    function runDetection(){
+      const highAmtThreshold = Number(document.getElementById('high-amt').value) || 10000;
+      const enableAmt = document.getElementById('rule-amount').checked;
+      const enableRapid = document.getElementById('rule-rapid').checked;
+      const enableNewMer = document.getElementById('rule-newmerchant').checked;
+      const enableVerif = document.getElementById('rule-verification').checked;
+
+      // build user->last transactions map
+      const bySender = {};
+      txns.forEach(t=>{
+        t.flags = [];
+        if(!bySender[t.sender_vpa]) bySender[t.sender_vpa]=[];
+        bySender[t.sender_vpa].push(t);
+      });
+
+      Object.values(bySender).forEach(list=>{
+        list.sort((a,b)=>a.timestamp - b.timestamp);
+        // rapid transaction rule
+        for(let i=0;i<list.length;i++){
+          if(enableRapid){
+            const window = list.slice(Math.max(0,i-3),i+1);
+            if(window.length>=4){
+              const dt = window[window.length-1].timestamp - window[0].timestamp;
+              if(dt<=60000){ // 60s
+                window.forEach(w=> w.flags.push({label:'rapid-seq',level:'high'}));
+              }
+            }
+          }
+        }
+        // new merchant rule
+        if(enableNewMer){
+          const seen = new Set();
+          list.forEach(t=>{
+            if(!seen.has(t.merchant) && seen.size>0){
+              t.flags.push({label:'new-merchant',level:'medium'});
+            }
+            seen.add(t.merchant);
+          });
+        }
+      });
+
+      txns.forEach(t=>{
+        if(enableAmt && t.amount>highAmtThreshold){ t.flags.push({label:'high-amount',level:'high'}); }
+        if(enableVerif && /screenshot|redirect|fake|page/i.test(t.verification_steps||'')){
+          t.flags.push({label:'suspicious-verification',level:'high'});
+        }
+      });
+
+      renderTable(document.getElementById('filter-risk').value);
+      alert('Detection complete — flagged: '+txns.filter(t=>t.flags.length).length);
+    }
+
+    // sample data generator
+    function genSample(n=80){
+      const merchants = ['Kirana A','MobileStore','FoodExpress','TravelPay','MerchantX','GymPoint','StationaryHub'];
+      const locations = ['Bengaluru','Mumbai','Delhi','Hyderabad','Chennai','Pune'];
+      for(let i=0;i<n;i++){
+        const amt = Math.round(Math.random()*20000);
+        const ts = Date.now() - Math.floor(Math.random()*1000*60*60*24);
+        const sender = 'user'+(1+Math.floor(Math.random()*15))+'@bank';
+        const m = merchants[Math.floor(Math.random()*merchants.length)];
+        const rec = 'merchant'+(1+Math.floor(Math.random()*30))+'@upi';
+        const ver = Math.random()<0.08 ? 'screenshot sent, redirected page' : 'otp';
+        txns.push({txn_id:'T'+Math.floor(100000+Math.random()*899999), timestamp:ts, sender_vpa:sender, receiver_vpa:rec, amount:amt, merchant:m, location: locations[Math.floor(Math.random()*locations.length)], channel:'app', verification_steps:ver, flags:[]});
+      }
+      renderTable();
+    }
+
+    // CSV parser (naive)
+    document.getElementById('file-input').addEventListener('change', e=>{
+      const f = e.target.files[0]; if(!f) return;
+      const reader = new FileReader();
+      reader.onload = ev=>{
+        const text = ev.target.result;
+        const rows = text.split(/\r?\n/).filter(Boolean);
+        const header = rows.shift().split(',').map(h=>h.trim());
+        rows.forEach(r=>{
+          const cols = r.split(',');
+          const obj = {};
+          header.forEach((h,i)=> obj[h]=cols[i]||'');
+          // normalize
+          txns.push({txn_id: obj.txn_id || 'T'+Math.floor(Math.random()*1000000), timestamp: obj.timestamp ? Number(obj.timestamp) : Date.now(), sender_vpa: obj.sender_vpa||'unknown', receiver_vpa: obj.receiver_vpa||'unknown', amount: Number(obj.amount)||0, merchant: obj.merchant||'unknown', location: obj.location||'unknown', channel: obj.channel||'app', verification_steps: obj.verification_steps||'', flags:[]});
+        });
+        renderTable();
+        alert('CSV imported: '+rows.length+' rows');
+      };
+      reader.readAsText(f);
+    });
+
+    // export flagged
+    document.getElementById('export-flagged').addEventListener('click', ()=>{
+      const flagged = txns.filter(t=>t.flags.length);
+      if(!flagged.length) return alert('No flagged transactions');
+      const header = ['txn_id','timestamp','sender_vpa','receiver_vpa','amount','merchant','location','flags'];
+      const csv = [header.join(',')].concat(flagged.map(t=>[t.txn_id,t.timestamp,t.sender_vpa,t.receiver_vpa,t.amount,t.merchant,t.location, JSON.stringify(t.flags.map(f=>f.label))].join(','))).join('\n');
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='flagged.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // UI bindings
+    document.getElementById('gen-sample').addEventListener('click', ()=>genSample(150));
+    document.getElementById('clear-data').addEventListener('click', ()=>{ if(confirm('Clear all data?')){ txns.length=0; renderTable(); }});
+    document.getElementById('run-detect').addEventListener('click', runDetection);
+    document.getElementById('filter-risk').addEventListener('change', e=> renderTable(e.target.value));
+
+    // simulator - quick modal that pushes transactions in real-time
+    let simInterval=null;
+    document.getElementById('show-sim').addEventListener('click', ()=>{
+      if(simInterval){ clearInterval(simInterval); simInterval=null; document.getElementById('show-sim').innerText='Launch Simulator'; return; }
+      simInterval = setInterval(()=>{
+        const amt = Math.round(Math.random()*30000);
+        const sender = 'user'+(1+Math.floor(Math.random()*30))+'@bank';
+        const rec = 'merchant'+(1+Math.floor(Math.random()*100))+'@upi';
+        const merchants = ['Kirana A','MobileStore','FoodExpress','TravelPay','MerchantX','GymPoint','StationaryHub'];
+        const m = merchants[Math.floor(Math.random()*merchants.length)];
+        txns.push({txn_id:'T'+Math.floor(100000+Math.random()*899999), timestamp:Date.now(), sender_vpa:sender, receiver_vpa:rec, amount:amt, merchant:m, location:['Bengaluru','Mumbai','Delhi'][Math.floor(Math.random()*3)], channel:'app', verification_steps: Math.random()<0.05? 'redirect, fake page' : 'otp', flags:[]});
+        // keep array size sane
+        while(txns.length>2000) txns.shift();
+        renderTable(document.getElementById('filter-risk').value);
+      }, 1200);
+      document.getElementById('show-sim').innerText='Stop Simulator';
+    });
+
+    document.getElementById('download-spec').addEventListener('click', ()=>{
+      const spec = `UPI Fraud Detection Prototype\n\nFeatures included:\n- CSV ingestion and parsing for transactional data\n- Real-time transaction simulator to test heuristics\n- Rule-based detection toggles (amount, rapid txns, new merchant, suspicious verification)\n- Investigation queue and simple note-taking per transaction\n- Chart (recent amounts) and quick stats\n- Export flagged transactions as CSV\n\nNext steps: Hook to backend streaming (Kafka), persist cases, build ML models, integrate trust signals, add operator authentication & RBAC.`;
+      const bl = new Blob([spec],{type:'text/plain'});
+      const url = URL.createObjectURL(bl); const a=document.createElement('a'); a.href=url; a.download='spec.txt'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // initialize demo
+    genSample(60);
+  </script>
+</body>
+</html>
